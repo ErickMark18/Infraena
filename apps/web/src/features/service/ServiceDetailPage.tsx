@@ -46,6 +46,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
   const [editDesc, setEditDesc] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showDeployDialog, setShowDeployDialog] = useState(false);
+  const [deployEnvironment, setDeployEnvironment] = useState("staging");
+  const [deployVersion, setDeployVersion] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -85,7 +88,11 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     if (!service) return;
     setDeploying(true);
     try {
-      await api.post(`/api/services/${service.slug}/deploy`);
+      await api.post(`/api/services/${service.slug}/deploy`, {
+        environment: deployEnvironment,
+        version: deployVersion.trim() || "latest",
+      });
+      setShowDeployDialog(false);
       await loadDeployments(1);
       const act = await api.get<ActivityItem[]>(`/api/services/${slug}/activity`).catch(() => []);
       setActivity(act);
@@ -241,7 +248,7 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
             </a>
           )}
           {service.status === "ready" && (
-            <Button onClick={handleDeploy} disabled={deploying} size="sm" className="gap-1.5">
+            <Button onClick={() => setShowDeployDialog(true)} disabled={deploying} size="sm" className="gap-1.5">
               <Rocket className="w-3.5 h-3.5" />{deploying ? "Deploying..." : "Deploy"}
             </Button>
           )}
@@ -402,6 +409,58 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
           )}
         </div>
       </div>
+
+      {showDeployDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowDeployDialog(false)} />
+          <div className="relative bg-background rounded-lg border shadow-lg max-w-sm w-full mx-4 p-6 animate-fade-up">
+            <button
+              onClick={() => setShowDeployDialog(false)}
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-sm font-semibold mb-4">Deploy service</h3>
+            <div className="space-y-4 mb-5">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Environment</label>
+                <div className="flex gap-2">
+                  {(["staging", "production"] as const).map((env) => (
+                    <button
+                      key={env}
+                      onClick={() => setDeployEnvironment(env)}
+                      className={`flex-1 px-3 py-2 text-xs rounded-md border capitalize transition-colors ${
+                        deployEnvironment === env
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-input hover:border-foreground/20"
+                      }`}
+                    >
+                      {env}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Version (optional)</label>
+                <Input
+                  value={deployVersion}
+                  onChange={(e) => setDeployVersion(e.target.value)}
+                  placeholder="latest"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowDeployDialog(false)} disabled={deploying}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleDeploy} disabled={deploying}>
+                {deploying ? "Deploying..." : "Deploy"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={showConfirm}

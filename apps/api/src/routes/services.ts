@@ -338,7 +338,20 @@ export async function serviceRoutes(app: FastifyInstance) {
 
     const syncResult = await syncArgoCDApp(`infraena-${service.slug}`);
 
-    return reply.status(201).send({ ...deployment, syncResult });
+    const finalStatus = syncResult === null
+      ? "running"
+      : syncResult.startsWith("Argo CD sync triggered")
+        ? "success"
+        : "failed";
+
+    if (finalStatus !== "running") {
+      await prisma.deployment.update({
+        where: { id: deployment.id },
+        data: { status: finalStatus },
+      });
+    }
+
+    return reply.status(201).send({ ...deployment, status: finalStatus, syncResult });
   });
 
   app.patch("/:slug", { preHandler: [authMiddleware] }, async (request, reply) => {
