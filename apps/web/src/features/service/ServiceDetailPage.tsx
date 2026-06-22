@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Service, ProvisionJob, Deployment } from "@idp/shared-types";
 import { api } from "@/lib/api";
+import { useProvisionLogs } from "@/lib/websocket";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StackBadge } from "@/components/StackBadge";
 import { LogTerminal } from "@/components/LogTerminal";
@@ -53,6 +54,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
   const [provisionSteps, setProvisionSteps] = useState<string[]>(["github", "terraform", "vault"]);
   const [provisionBranchProtection, setProvisionBranchProtection] = useState(true);
   const [provisioning, setProvisioning] = useState(false);
+  const [provisioningServiceId, setProvisioningServiceId] = useState<string | null>(null);
+
+  const provisionLogs = useProvisionLogs(provisioningServiceId);
 
   useEffect(() => {
     async function load() {
@@ -118,12 +122,23 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
         enableBranchProtection: provisionBranchProtection,
       });
       setShowProvisionDialog(false);
-      const svc = await api.get<Service>(`/api/services/${service.slug}`);
-      setService(svc);
-      const jobsData = await api.get<ProvisionJob[]>(`/api/services/${slug}/jobs`).catch(() => []);
-      setJobs(jobsData);
-      const act = await api.get<ActivityItem[]>(`/api/services/${slug}/activity`).catch(() => []);
-      setActivity(act);
+      setProvisioningServiceId(service.id);
+
+      const poll = setInterval(async () => {
+        try {
+          const jobsData = await api.get<ProvisionJob[]>(`/api/services/${slug}/jobs`).catch(() => []);
+          setJobs(jobsData);
+          const allDone = jobsData.length > 0 && jobsData.every((j) => j.status === "success" || j.status === "failed");
+          if (allDone && jobsData.length >= provisionSteps.length) {
+            const svc = await api.get<Service>(`/api/services/${service.slug}`);
+            setService(svc);
+            const act = await api.get<ActivityItem[]>(`/api/services/${slug}/activity`).catch(() => []);
+            setActivity(act);
+            setProvisioningServiceId(null);
+            clearInterval(poll);
+          }
+        } catch {}
+      }, 2500);
     } catch {} finally {
       setProvisioning(false);
     }
@@ -295,6 +310,26 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
         </div>
       </div>
 
+      {provisioningServiceId && (
+        <Card className="mb-6 border-blue-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              Provisioning...
+            </CardTitle>
+            <CardDescription>Real-time logs for the selected steps</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {provisionSteps.map((type) => (
+              <div key={type}>
+                <h4 className="text-xs font-medium mb-1 capitalize text-muted-foreground">{type}</h4>
+                <LogTerminal logs={provisionLogs[type] ?? []} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main grid */}
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
@@ -459,7 +494,7 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
             </p>
             <div className="space-y-2 mb-5">
               {([
-                { key: "github", label: "GitHub topic + branch protection" },
+                { key: "github", label: "GitHub topic" },
                 { key: "terraform", label: "Terraform Cloud workspace" },
                 { key: "vault", label: "Vault secrets" },
               ] as const).map(({ key, label }) => {
