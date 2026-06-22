@@ -55,6 +55,13 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importTeamId, setImportTeamId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importProvisioning, setImportProvisioning] = useState<string[]>(["github", "terraform", "vault"]);
+  const [importBranchProtection, setImportBranchProtection] = useState(true);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
@@ -80,6 +87,29 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
   }, [languageFilters, statusFilter, teamFilter, page, sort, sortOrder]);
 
   useEffect(() => { fetchServices(); }, [fetchServices]);
+
+  useEffect(() => {
+    api.get<{ id: string; name: string }[]>("/api/teams").then(setTeams).catch(() => {});
+  }, []);
+
+  const handleImport = async () => {
+    if (!importUrl || !importTeamId) return;
+    setImporting(true);
+    try {
+      await api.post("/api/services/import", {
+        repoUrl: importUrl,
+        teamId: importTeamId,
+        provisioning: importProvisioning,
+        enableBranchProtection: importBranchProtection,
+      });
+      setShowImport(false);
+      setImportUrl("");
+      setImportTeamId("");
+      fetchServices();
+    } catch {} finally {
+      setImporting(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!search) return services;
@@ -184,6 +214,9 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
               className={cn("px-2 py-1.5 text-xs transition-colors rounded-r-md", viewMode === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}
             ><LayoutGrid className="w-3.5 h-3.5" /></button>
           </div>
+          <Button onClick={() => setShowImport(true)} size="sm" variant="outline" className="gap-1.5">
+            <ArrowRight className="w-4 h-4 rotate-90" />Import
+          </Button>
           <Button onClick={() => onNavigate("/new")} size="sm" className="gap-1.5">
             <Plus className="w-4 h-4" />New
           </Button>
@@ -408,6 +441,70 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
         onConfirm={() => confirmDelete && handleDelete(confirmDelete)}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowImport(false)} />
+          <div className="relative bg-background rounded-lg border shadow-lg max-w-md w-full mx-4 p-6 animate-fade-up">
+            <button onClick={() => setShowImport(false)} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-sm font-semibold mb-4">Import repository</h3>
+            <div className="space-y-4 mb-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">GitHub Repository URL</label>
+                <Input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Team</label>
+                <select
+                  value={importTeamId}
+                  onChange={(e) => setImportTeamId(e.target.value)}
+                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Select a team...</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Apply provisioning</label>
+                {([
+                  { key: "github", label: "GitHub topic + branch protection" },
+                  { key: "terraform", label: "Terraform Cloud workspace" },
+                  { key: "vault", label: "Vault secrets" },
+                ] as const).map(({ key, label }) => {
+                  const checked = importProvisioning.includes(key);
+                  return (
+                    <label key={key} className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer text-xs transition-colors ${checked ? "border-primary bg-primary/5" : "border-input hover:border-primary/30"}`}>
+                      <input type="checkbox" checked={checked} onChange={() => setImportProvisioning((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])} className="h-3.5 w-3.5 rounded border-input text-primary focus:ring-primary" />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+              {importProvisioning.includes("github") && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={importBranchProtection} onChange={(e) => setImportBranchProtection(e.target.checked)} className="h-3.5 w-3.5 rounded border-input text-primary focus:ring-primary" />
+                  <span className="text-xs text-muted-foreground">Enable branch protection</span>
+                </label>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowImport(false)} disabled={importing}>Cancel</Button>
+              <Button size="sm" onClick={handleImport} disabled={importing || !importUrl || !importTeamId}>
+                {importing ? "Importing..." : "Import"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

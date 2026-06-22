@@ -41,6 +41,8 @@ interface GitHubJobData {
   languages: string[];
   template?: string;
   enableBranchProtection?: boolean;
+  repoOwner?: string;
+  repoName?: string;
 }
 
 async function repoExists(octokit: Octokit, org: string, repo: string): Promise<boolean> {
@@ -163,7 +165,7 @@ export async function buildGitHubWorker() {
   const worker = new Worker<GitHubJobData>(
     "github-queue",
     async (job: Job<GitHubJobData>) => {
-      const { serviceId, jobId, slug, category, languages, template, enableBranchProtection } = job.data;
+      const { serviceId, jobId, slug, category, languages, template, enableBranchProtection, repoOwner, repoName } = job.data;
 
       const provisionJob = await prisma.provisionJob.findUnique({
         where: { id: jobId },
@@ -207,23 +209,24 @@ export async function buildGitHubWorker() {
       }
 
       const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
-      const org = env.GITHUB_ORG;
+      const org = repoOwner ?? env.GITHUB_ORG;
+      const repo = repoName ?? slug;
       const templateId = template ?? (languages.length > 0 ? languages[0] : category);
 
       await markJobRunning(provisionJob);
       const log = (msg: string) => updateJobLog(provisionJob, msg);
 
       try {
-        const exists = await repoExists(octokit, org, slug);
+        const exists = await repoExists(octokit, org, repo);
         if (exists) {
-          await log(`Repo ${org}/${slug} already exists, skipping creation.`);
+          await log(`Repo ${org}/${repo} already exists, skipping creation.`);
         } else {
-          await log(`Creating blank repo: ${org}/${slug}...`);
-          const repoUrl = await createBlankRepo(octokit, org, slug);
+          await log(`Creating blank repo: ${org}/${repo}...`);
+          const repoUrl = await createBlankRepo(octokit, org, repo);
           await log(`Repo created: ${repoUrl}`);
 
           await log(`Pushing template files: ${templateId}...`);
-          await pushTemplateFiles(octokit, org, slug, templateId, slug, log);
+          await pushTemplateFiles(octokit, org, repo, templateId, slug, log);
 
           await prisma.service.update({
             where: { id: serviceId },
@@ -233,12 +236,12 @@ export async function buildGitHubWorker() {
         }
 
         await log("Adding infraena-managed topic...");
-        const topicResult = await addIdpTopic(octokit, org, slug);
+        const topicResult = await addIdpTopic(octokit, org, repo);
         await log(topicResult);
 
         if (enableBranchProtection !== false) {
           await log("Configuring branch protection...");
-          const protectionResult = await setBranchProtection(octokit, org, slug);
+          const protectionResult = await setBranchProtection(octokit, org, repo);
           await log(protectionResult);
         } else {
           await log("Branch protection skipped (disabled by user).");

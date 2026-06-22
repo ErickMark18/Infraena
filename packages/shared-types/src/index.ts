@@ -27,7 +27,7 @@ export const CATEGORIES = {
 
 export type ServiceCategory = keyof typeof CATEGORIES;
 export type ServiceLanguage = (typeof CATEGORIES)[ServiceCategory][number];
-export type ServiceStatus = "provisioning" | "ready" | "failed";
+export type ServiceStatus = "provisioning" | "ready" | "failed" | "imported";
 export type ProvisioningStep = "github" | "terraform" | "vault";
 export type JobType = ProvisioningStep;
 export type JobStatus = "pending" | "running" | "success" | "failed";

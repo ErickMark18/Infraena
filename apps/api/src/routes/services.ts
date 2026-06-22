@@ -81,6 +81,14 @@ const createServiceSchema = z.object({
   enableBranchProtection: z.boolean().optional(),
 });
 
+const importServiceSchema = z.object({
+  repoUrl: z.string().url().refine((u) => /github\.com\/[^/]+\/[^/]+/.test(u), "Must be a GitHub repo URL"),
+  name: z.string().min(3).max(40).regex(/^[a-z][a-z0-9-]*$/).optional(),
+  teamId: z.string().uuid(),
+  provisioning: z.array(z.enum(["github", "terraform", "vault"])).optional(),
+  enableBranchProtection: z.boolean().optional(),
+});
+
 export async function serviceRoutes(app: FastifyInstance) {
   app.get("/templates", async () => {
     return getTemplates();
@@ -260,6 +268,115 @@ export async function serviceRoutes(app: FastifyInstance) {
         };
         if (type === "github") {
           (jobData as Record<string, unknown>).enableBranchProtection = enableBranchProtection ?? true;
+        }
+        await queue.add(type, jobData, {
+          jobId: job.id,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+      }
+    }
+
+    return reply.status(201).send(service);
+  });
+
+  app.post("/import", { preHandler: [authMiddleware] }, async (request, reply) => {
+    const parseResult = importServiceSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: parseResult.error.flatten().fieldErrors });
+    }
+
+    const { repoUrl, name, teamId, provisioning, enableBranchProtection } = parseResult.data;
+    const user = getUser(request);
+
+    const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git|\/|$)/);
+    if (!match) {
+      return reply.status(400).send({ error: "Invalid GitHub repo URL" });
+    }
+    const [, owner, repoName] = match;
+    const slug = name?.toLowerCase().replace(/[^a-z0-9-]/g, "-") ?? repoName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+
+    const existingSlug = await prisma.service.findUnique({ where: { slug } });
+    if (existingSlug) {
+      return reply.status(409).send({ error: "Service with this slug already exists" });
+    }
+
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) {
+      return reply.status(404).send({ error: "Team not found" });
+    }
+
+    if (!env.GITHUB_TOKEN) {
+      return reply.status(400).send({ error: "GITHUB_TOKEN not configured — cannot verify repo access" });
+    }
+
+    const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
+    try {
+      const { data: repo } = await octokit.rest.repos.get({ owner, repo: repoName });
+      if (!repo) {
+        return reply.status(404).send({ error: "Repository not found or no access" });
+      }
+    } catch (e: unknown) {
+      const status = (e as { status?: number }).status;
+      if (status === 404) return reply.status(404).send({ error: "Repository not found or no access" });
+      return reply.status(400).send({ error: `Cannot access repo: ${(e as Error).message}` });
+    }
+
+    const selectedSteps = provisioning ?? ["github", "terraform", "vault"];
+
+    const service = await prisma.service.create({
+      data: {
+        name: name ?? repoName,
+        slug,
+        description: `Imported from ${repoUrl}`,
+        category: "other",
+        languages: [],
+        provisioning: selectedSteps,
+        githubRepoUrl: `https://github.com/${owner}/${repoName}`,
+        teamId,
+        ownerId: user?.sub
+          ? await prisma.user.findUnique({ where: { id: user.sub } }).then((u) => u?.id ?? null)
+          : null,
+        status: "provisioning",
+      },
+      include: { team: true, owner: true },
+    });
+
+    const allJobTypes = [
+      { type: "github" as const, queue: githubQueue },
+      { type: "terraform" as const, queue: terraformQueue },
+      { type: "vault" as const, queue: vaultQueue },
+    ];
+
+    const jobTypes = allJobTypes.filter((jt) => selectedSteps.includes(jt.type));
+
+    const jobs = await Promise.all(
+      jobTypes.map(({ type }) =>
+        prisma.provisionJob.create({
+          data: { serviceId: service.id, type, status: "pending" },
+        })
+      )
+    );
+
+    const isTest = process.env.NODE_ENV === "test" || process.env.VITEST;
+
+    for (let i = 0; i < jobTypes.length; i++) {
+      const { queue, type } = jobTypes[i];
+      const job = jobs[i];
+
+      if (!isTest) {
+        const jobData: Record<string, unknown> = {
+          serviceId: service.id,
+          jobId: job.id,
+          slug: service.slug,
+          category: service.category,
+          languages: service.languages,
+          template: undefined,
+        };
+        if (type === "github") {
+          (jobData as Record<string, unknown>).enableBranchProtection = enableBranchProtection ?? true;
+          (jobData as Record<string, unknown>).repoOwner = owner;
+          (jobData as Record<string, unknown>).repoName = repoName;
         }
         await queue.add(type, jobData, {
           jobId: job.id,
