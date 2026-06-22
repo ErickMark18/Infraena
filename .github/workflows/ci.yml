@@ -22,6 +22,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
       - run: pnpm turbo lint
 
   typecheck:
@@ -81,6 +83,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run Prisma migrations
         run: pnpm db:migrate
+      - name: Create .env for tests
+        run: |
+          cat > apps/api/.env << 'ENVEOF'
+          DATABASE_URL=postgresql://idp:idp@localhost:5432/idp_test
+          REDIS_URL=redis://localhost:6379
+          VAULT_ADDR=http://localhost:8200
+          VAULT_TOKEN=root
+          JWT_SECRET=test-jwt-secret-for-ci-minimum-32-characters-long
+          ENVEOF
       - run: pnpm turbo test
 
   build:
