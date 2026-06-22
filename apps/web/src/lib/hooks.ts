@@ -44,7 +44,11 @@ export function useAuth() {
   };
 
   const logout = async () => {
-    await api.post("/auth/logout");
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // even if the server call fails, clear local state
+    }
     setUser(null);
     setToken(null);
   };
