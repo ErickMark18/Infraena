@@ -595,6 +595,81 @@ export async function serviceRoutes(app: FastifyInstance) {
     return { success: true, app: appName, result };
   });
 
+  app.post("/:slug/provision", { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const body = (request.body ?? {}) as {
+      steps?: ("github" | "terraform" | "vault")[];
+      enableBranchProtection?: boolean;
+    };
+    const { steps, enableBranchProtection } = body;
+
+    const service = await prisma.service.findUnique({
+      where: { slug },
+      include: { provisionJobs: true },
+    });
+    if (!service) {
+      return reply.status(404).send({ error: "Service not found" });
+    }
+
+    const requestedSteps = steps ?? ["github", "terraform", "vault"];
+
+    const successTypes = new Set(
+      service.provisionJobs
+        .filter((j) => j.status === "success")
+        .map((j) => j.type)
+    );
+
+    const newSteps = requestedSteps.filter((s) => !successTypes.has(s));
+
+    if (newSteps.length === 0) {
+      return reply.status(200).send({ message: "All requested steps are already provisioned", provisioned: [] });
+    }
+
+    const allJobTypes = [
+      { type: "github" as const, queue: githubQueue },
+      { type: "terraform" as const, queue: terraformQueue },
+      { type: "vault" as const, queue: vaultQueue },
+    ];
+
+    const jobTypes = allJobTypes.filter((jt) => newSteps.includes(jt.type));
+
+    const jobs = await Promise.all(
+      jobTypes.map(({ type }) =>
+        prisma.provisionJob.create({
+          data: { serviceId: service.id, type, status: "pending" },
+        })
+      )
+    );
+
+    const isTest = process.env.NODE_ENV === "test" || process.env.VITEST;
+
+    for (let i = 0; i < jobTypes.length; i++) {
+      const { queue, type } = jobTypes[i];
+      const job = jobs[i];
+
+      if (!isTest) {
+        const jobData: Record<string, unknown> = {
+          serviceId: service.id,
+          jobId: job.id,
+          slug: service.slug,
+          category: service.category,
+          languages: service.languages,
+          template: undefined,
+        };
+        if (type === "github") {
+          (jobData as Record<string, unknown>).enableBranchProtection = enableBranchProtection ?? true;
+        }
+        await queue.add(type, jobData, {
+          jobId: job.id,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+      }
+    }
+
+    return reply.status(201).send({ message: "Provisioning started", provisioned: newSteps });
+  });
+
   app.delete("/:slug", { preHandler: [authMiddleware] }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
 

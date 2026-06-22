@@ -49,6 +49,10 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
   const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [deployEnvironment, setDeployEnvironment] = useState("staging");
   const [deployVersion, setDeployVersion] = useState("");
+  const [showProvisionDialog, setShowProvisionDialog] = useState(false);
+  const [provisionSteps, setProvisionSteps] = useState<string[]>(["github", "terraform", "vault"]);
+  const [provisionBranchProtection, setProvisionBranchProtection] = useState(true);
+  const [provisioning, setProvisioning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -98,6 +102,30 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
       setActivity(act);
     } catch {} finally {
       setDeploying(false);
+    }
+  };
+
+  const doneSteps = new Set(jobs.filter((j) => j.status === "success").map((j) => j.type));
+  const allSteps = ["github", "terraform", "vault"] as const;
+  const missingSteps = allSteps.filter((s) => !doneSteps.has(s));
+
+  const handleProvision = async () => {
+    if (!service) return;
+    setProvisioning(true);
+    try {
+      await api.post(`/api/services/${service.slug}/provision`, {
+        steps: provisionSteps,
+        enableBranchProtection: provisionBranchProtection,
+      });
+      setShowProvisionDialog(false);
+      const svc = await api.get<Service>(`/api/services/${service.slug}`);
+      setService(svc);
+      const jobsData = await api.get<ProvisionJob[]>(`/api/services/${slug}/jobs`).catch(() => []);
+      setJobs(jobsData);
+      const act = await api.get<ActivityItem[]>(`/api/services/${slug}/activity`).catch(() => []);
+      setActivity(act);
+    } catch {} finally {
+      setProvisioning(false);
     }
   };
 
@@ -246,6 +274,14 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
                 <Github className="w-3.5 h-3.5" />Repo
               </Button>
             </a>
+          )}
+          {(service.status === "imported" || (service.status === "ready" && missingSteps.length > 0)) && (
+            <Button onClick={() => {
+              setProvisionSteps(missingSteps);
+              setShowProvisionDialog(true);
+            }} disabled={provisioning} size="sm" variant="outline" className="gap-1.5">
+              <Bolt className="w-3.5 h-3.5" />Provision
+            </Button>
           )}
           {service.status === "ready" && (
             <Button onClick={() => setShowDeployDialog(true)} disabled={deploying} size="sm" className="gap-1.5">
@@ -409,6 +445,58 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
           )}
         </div>
       </div>
+
+      {showProvisionDialog && service && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowProvisionDialog(false)} />
+          <div className="relative bg-background rounded-lg border shadow-lg max-w-sm w-full mx-4 p-6 animate-fade-up">
+            <button onClick={() => setShowProvisionDialog(false)} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-sm font-semibold mb-4">Provision infrastructure</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Apply missing provisioning steps to this service. Already completed steps are pre-selected off.
+            </p>
+            <div className="space-y-2 mb-5">
+              {([
+                { key: "github", label: "GitHub topic + branch protection" },
+                { key: "terraform", label: "Terraform Cloud workspace" },
+                { key: "vault", label: "Vault secrets" },
+              ] as const).map(({ key, label }) => {
+                const alreadyDone = doneSteps.has(key);
+                const checked = provisionSteps.includes(key);
+                return (
+                  <label key={key} className={`flex items-start gap-2 p-2 rounded-md border text-xs transition-colors ${checked ? "border-primary bg-primary/5" : "border-input hover:border-primary/30"} ${alreadyDone ? "opacity-50" : "cursor-pointer"}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={alreadyDone}
+                      onChange={() => setProvisionSteps((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])}
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <div>
+                      <span className="text-xs font-medium">{label}</span>
+                      {alreadyDone && <span className="text-[10px] text-emerald-600 ml-1.5">Already done</span>}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            {provisionSteps.includes("github") && !doneSteps.has("github") && (
+              <label className="flex items-center gap-2 cursor-pointer mb-5">
+                <input type="checkbox" checked={provisionBranchProtection} onChange={(e) => setProvisionBranchProtection(e.target.checked)} className="h-3.5 w-3.5 rounded border-input text-primary focus:ring-primary" />
+                <span className="text-xs text-muted-foreground">Enable branch protection</span>
+              </label>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowProvisionDialog(false)} disabled={provisioning}>Cancel</Button>
+              <Button size="sm" onClick={handleProvision} disabled={provisioning || provisionSteps.length === 0}>
+                {provisioning ? "Provisioning..." : "Provision"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeployDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
