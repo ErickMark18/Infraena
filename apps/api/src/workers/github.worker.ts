@@ -62,7 +62,7 @@ async function createBlankRepo(
 ): Promise<string> {
   try {
     const { data: repo } = await octokit.rest.repos.createInOrg({
-      org, name: slug, private: true, auto_init: true,
+      org, name: slug, private: true, auto_init: false,
       description: `Managed by Infraena`,
     });
     return repo.html_url;
@@ -70,7 +70,7 @@ async function createBlankRepo(
     const status = (e as { status?: number }).status;
     if (status === 404 || status === 403) {
       const { data: repo } = await octokit.rest.repos.createForAuthenticatedUser({
-        name: slug, private: true, auto_init: true,
+        name: slug, private: true, auto_init: false,
         description: `Managed by Infraena`,
       });
       return repo.html_url;
@@ -85,7 +85,8 @@ async function pushFileToRepo(
   repo: string,
   path: string,
   content: string,
-  message: string
+  message: string,
+  committer?: { name: string; email: string }
 ) {
   try {
     await octokit.rest.repos.createOrUpdateFileContents({
@@ -94,6 +95,7 @@ async function pushFileToRepo(
       path,
       message,
       content: Buffer.from(content).toString("base64"),
+      ...(committer ? { committer, author: committer } : {}),
     });
   } catch {
     // file may already exist, skip
@@ -106,7 +108,8 @@ async function pushTemplateFiles(
   repo: string,
   templateId: string,
   slug: string,
-  log: (msg: string) => void
+  log: (msg: string) => void,
+  committer?: { name: string; email: string }
 ) {
   const files = loadTemplate(templateId);
   if (!files) {
@@ -124,7 +127,8 @@ async function pushTemplateFiles(
       repo,
       filePath,
       finalContent,
-      `Add ${filePath} from Infraena template ${templateId}`
+      `Add ${filePath} from Infraena template ${templateId}`,
+      committer
     );
     await log(`  ✓ ${filePath}`);
   }
@@ -219,6 +223,16 @@ export async function buildGitHubWorker() {
       try {
         const repoUrl = `https://github.com/${org}/${repo}`;
         const exists = await repoExists(octokit, org, repo);
+
+        // Fetch owner for consistent commit identity
+        const ownerUser = service.ownerId
+          ? await prisma.user.findUnique({ where: { id: service.ownerId }, select: { username: true, email: true, githubId: true } })
+          : null;
+        const committer = ownerUser ? {
+          name: ownerUser.username,
+          email: ownerUser.email || `${ownerUser.githubId}+${ownerUser.username}@users.noreply.github.com`,
+        } : undefined;
+
         if (exists) {
           await log(`Repo ${org}/${repo} already exists, skipping creation.`);
         } else {
@@ -226,8 +240,16 @@ export async function buildGitHubWorker() {
           const newRepoUrl = await createBlankRepo(octokit, org, repo);
           await log(`Repo created: ${newRepoUrl}`);
 
+          await log("Initializing repo...");
+          await pushFileToRepo(
+            octokit, org, repo, "README.md",
+            `# ${slug}\n\nManaged by Infraena.`,
+            "Initial commit from Infraena",
+            committer
+          );
+
           await log(`Pushing template files: ${templateId}...`);
-          await pushTemplateFiles(octokit, org, repo, templateId, slug, log);
+          await pushTemplateFiles(octokit, org, repo, templateId, slug, log, committer);
         }
 
         const currentSvc = await prisma.service.findUnique({

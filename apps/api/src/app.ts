@@ -8,6 +8,7 @@ import { env } from "./lib/env.js";
 import { authRoutes } from "./routes/auth.js";
 import { serviceRoutes } from "./routes/services.js";
 import { teamRoutes } from "./routes/teams.js";
+import { setupRoutes } from "./routes/setup.js";
 import {
   httpRequestsTotal,
   httpRequestDurationSeconds,
@@ -94,6 +95,7 @@ app.get("/metrics", async (_request, reply) => {
 app.register(authRoutes, { prefix: "/auth" });
 app.register(serviceRoutes, { prefix: "/api/services" });
 app.register(teamRoutes, { prefix: "/api/teams" });
+app.register(setupRoutes, { prefix: "/api/setup" });
 
 app.get("/health", async () => {
   return { status: "ok", timestamp: new Date().toISOString() };

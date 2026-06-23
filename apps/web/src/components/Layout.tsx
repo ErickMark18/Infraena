@@ -114,6 +114,9 @@ export function Layout({ children, user, onLogin, onLogout, currentPath, onNavig
             <button onClick={() => onNavigate("/teams")} className={`px-3 py-1.5 rounded-md transition-colors ${
               isActive("/teams") ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
             }`}>Teams</button>
+            <button onClick={() => onNavigate("/setup")} className={`px-3 py-1.5 rounded-md transition-colors ${
+              isActive("/setup") ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+            }`}>Setup</button>
             <button onClick={() => onNavigate("/new")} className={`px-3 py-1.5 rounded-md transition-colors ${
               isActive("/new") ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
             }`}>

@@ -4,18 +4,21 @@ import { CatalogPage } from "@/features/catalog/CatalogPage";
 import { CreateServicePage } from "@/features/create/CreateServicePage";
 import { ServiceDetailPage } from "@/features/service/ServiceDetailPage";
 import { TeamsPage } from "@/features/teams/TeamsPage";
+import { SetupPage } from "@/features/setup/SetupPage";
 import { useAuth } from "@/lib/hooks";
 
 type Page =
   | { name: "catalog" }
   | { name: "create" }
   | { name: "teams" }
+  | { name: "setup" }
   | { name: "service"; slug: string };
 
 function getPageFromPath(): Page {
   const path = window.location.pathname;
   if (path === "/new") return { name: "create" };
   if (path === "/teams") return { name: "teams" };
+  if (path === "/setup") return { name: "setup" };
   const match = path.match(/^\/services\/(.+)/);
   if (match) return { name: "service", slug: match[1] };
   return { name: "catalog" };
@@ -60,6 +63,7 @@ export default function App() {
       {page.name === "catalog"  && <CatalogPage onNavigate={navigate} />}
       {page.name === "create"   && <CreateServicePage onNavigate={navigate} />}
       {page.name === "teams"    && <TeamsPage onNavigate={navigate} />}
+      {page.name === "setup"    && <SetupPage onNavigate={navigate} />}
       {page.name === "service"  && <ServiceDetailPage slug={page.slug} onNavigate={navigate} />}
     </Layout>
   );
