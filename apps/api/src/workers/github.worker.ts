@@ -217,17 +217,24 @@ export async function buildGitHubWorker() {
       const log = (msg: string) => updateJobLog(provisionJob, msg);
 
       try {
+        const repoUrl = `https://github.com/${org}/${repo}`;
         const exists = await repoExists(octokit, org, repo);
         if (exists) {
           await log(`Repo ${org}/${repo} already exists, skipping creation.`);
         } else {
           await log(`Creating blank repo: ${org}/${repo}...`);
-          const repoUrl = await createBlankRepo(octokit, org, repo);
-          await log(`Repo created: ${repoUrl}`);
+          const newRepoUrl = await createBlankRepo(octokit, org, repo);
+          await log(`Repo created: ${newRepoUrl}`);
 
           await log(`Pushing template files: ${templateId}...`);
           await pushTemplateFiles(octokit, org, repo, templateId, slug, log);
+        }
 
+        const currentSvc = await prisma.service.findUnique({
+          where: { id: serviceId },
+          select: { githubRepoUrl: true },
+        });
+        if (!currentSvc?.githubRepoUrl) {
           await prisma.service.update({
             where: { id: serviceId },
             data: { githubRepoUrl: repoUrl },

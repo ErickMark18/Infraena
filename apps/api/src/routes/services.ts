@@ -213,6 +213,7 @@ export async function serviceRoutes(app: FastifyInstance) {
     }
 
     const selectedSteps = provisioning ?? ["github", "terraform", "vault"];
+    const initialStatus = selectedSteps.length === 0 ? "ready" : "provisioning";
 
     const service = await prisma.service.create({
       data: {
@@ -226,7 +227,7 @@ export async function serviceRoutes(app: FastifyInstance) {
         ownerId: user?.sub
           ? await prisma.user.findUnique({ where: { id: user.sub } }).then((u) => u?.id ?? null)
           : null,
-        status: "provisioning",
+        status: initialStatus,
       },
       include: { team: true, owner: true },
     });
@@ -323,6 +324,7 @@ export async function serviceRoutes(app: FastifyInstance) {
     }
 
     const selectedSteps = provisioning ?? ["github", "terraform", "vault"];
+    const initialStatus = selectedSteps.length === 0 ? "ready" : "provisioning";
 
     const service = await prisma.service.create({
       data: {
@@ -337,7 +339,7 @@ export async function serviceRoutes(app: FastifyInstance) {
         ownerId: user?.sub
           ? await prisma.user.findUnique({ where: { id: user.sub } }).then((u) => u?.id ?? null)
           : null,
-        status: "provisioning",
+        status: initialStatus,
       },
       include: { team: true, owner: true },
     });
@@ -543,7 +545,7 @@ export async function serviceRoutes(app: FastifyInstance) {
         type: "job" as const,
         subType: j.type,
         status: j.status,
-        message: j.logs.length > 0 ? j.logs[j.logs.length - 1] : `${j.type} job ${j.status}`,
+        message: j.logs.length > 0 ? j.logs[j.logs.length - 1].replace(/^\[[^\]]*\]\s*/, "") : `${j.type} job ${j.status}`,
         error: j.error,
         createdAt: j.createdAt.toISOString(),
       })),

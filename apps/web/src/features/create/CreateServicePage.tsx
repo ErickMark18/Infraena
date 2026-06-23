@@ -143,6 +143,9 @@ export function CreateServicePage({ onNavigate }: { onNavigate: (path: string) =
       const service = await api.post<Service>("/api/services", payload);
       setResult(service);
       setServiceId(service.id);
+      if (provisioning.length === 0) {
+        setStep("done");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create service");
       setStep("form");

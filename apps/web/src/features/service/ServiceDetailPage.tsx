@@ -310,26 +310,6 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
         </div>
       </div>
 
-      {provisioningServiceId && (
-        <Card className="mb-6 border-blue-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              Provisioning...
-            </CardTitle>
-            <CardDescription>Real-time logs for the selected steps</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {provisionSteps.map((type) => (
-              <div key={type}>
-                <h4 className="text-xs font-medium mb-1 capitalize text-muted-foreground">{type}</h4>
-                <LogTerminal logs={provisionLogs[type] ?? []} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Main grid */}
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
@@ -357,8 +337,8 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
                           {item.version && <Badge variant="secondary" className="text-[9px] font-mono">{item.version}</Badge>}
                           <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.message}</p>
-                        {item.error && <p className="text-[10px] text-red-500 mt-0.5 font-mono truncate">{item.error}</p>}
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.message}</p>
+                        {item.error && <p className="text-[10px] text-red-500 mt-0.5 font-mono line-clamp-2">{item.error}</p>}
                       </div>
                     </div>
                   ))}
@@ -368,7 +348,25 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
           )}
 
           {/* Provisioning Jobs */}
-          {jobs.length > 0 && (
+          {provisioningServiceId ? (
+            <Card className="border-blue-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  Provisioning...
+                </CardTitle>
+                <CardDescription>Real-time logs</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {provisionSteps.map((type) => (
+                  <div key={type}>
+                    <h4 className="text-xs font-medium mb-1 capitalize text-muted-foreground">{type}</h4>
+                    <LogTerminal logs={provisionLogs[type] ?? []} />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : jobs.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Provisioning jobs</CardTitle>

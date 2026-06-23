@@ -50,7 +50,8 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
   const [addUserSlug, setAddUserSlug] = useState<string | null>(null);
   const [addUsername, setAddUsername] = useState("");
   const [addingMember, setAddingMember] = useState(false);
-  const [grantRepoAccess, setGrantRepoAccess] = useState(false);
+  const [repoAccessLoading, setRepoAccessLoading] = useState<string | null>(null);
+  const [grantedUsers, setGrantedUsers] = useState<Set<string>>(new Set());
 
   const loadTeams = () => {
     api.get<Team[]>("/api/teams")
@@ -135,16 +136,11 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
     if (!addUserSlug || !addUsername.trim()) return;
     setAddingMember(true);
     try {
-      const res = await api.post<{ success: boolean; reposGranted?: number }>(`/api/teams/${addUserSlug}/members`, {
+      await api.post(`/api/teams/${addUserSlug}/members`, {
         username: addUsername.trim(),
-        grantRepoAccess,
       });
-      const msg = grantRepoAccess && res.reposGranted
-        ? `Member added with access to ${res.reposGranted} repo(s)`
-        : "Member added";
-      toast.success(msg);
+      toast.success("Member added");
       setAddUsername("");
-      setGrantRepoAccess(false);
       loadTeams();
       loadDetail(addUserSlug);
     } catch (err) {
@@ -162,6 +158,46 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
       loadDetail(teamSlug);
     } catch {
       toast.error("Failed to remove member");
+    }
+  };
+
+  const handleGrantRepoAccess = async (teamSlug: string, username: string) => {
+    setRepoAccessLoading(username);
+    try {
+      const res = await api.post<{ reposGranted: number; errors?: string[] }>(`/api/teams/${teamSlug}/repo-access`, { username });
+      if (res.reposGranted > 0) {
+        toast.success(`Granted access to ${res.reposGranted} repo(s)`);
+        setGrantedUsers((prev) => new Set(prev).add(username));
+      } else {
+        toast("Already has access to all team repos", { description: "No new permissions were granted." });
+      }
+      if (res.errors) toast.error(`Failed on: ${res.errors.join(", ")}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to grant repo access");
+    } finally {
+      setRepoAccessLoading(null);
+    }
+  };
+
+  const handleRevokeRepoAccess = async (teamSlug: string, userId: string, username: string) => {
+    setRepoAccessLoading(username);
+    try {
+      const res = await api.delete<{ reposRevoked: number; errors?: string[] }>(`/api/teams/${teamSlug}/repo-access/${userId}`);
+      if (res.reposRevoked > 0) {
+        toast.success(`Revoked access from ${res.reposRevoked} repo(s)`);
+        setGrantedUsers((prev) => {
+          const next = new Set(prev);
+          next.delete(username);
+          return next;
+        });
+      } else {
+        toast("No repo access to revoke", { description: "User may not have collaborator access." });
+      }
+      if (res.errors) toast.error(`Failed on: ${res.errors.join(", ")}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke repo access");
+    } finally {
+      setRepoAccessLoading(null);
     }
   };
 
@@ -281,7 +317,7 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
                                 Members ({selectedTeam._count.users})
                               </h4>
                               <button
-                                onClick={() => { setAddUserSlug(team.slug); setAddUsername(""); setGrantRepoAccess(false); }}
+                                onClick={() => { setAddUserSlug(team.slug); setAddUsername(""); }}
                                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                               >
                                 <UserPlus className="w-3 h-3" /> Add
@@ -302,24 +338,10 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
                                     {addingMember ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                                     Add
                                   </Button>
-                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAddUserSlug(null); setGrantRepoAccess(false); }}>
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAddUserSlug(null)}>
                                     Cancel
                                   </Button>
                                 </div>
-                                {selectedTeam && selectedTeam.services.some(s => "githubRepoUrl" in s && s.githubRepoUrl) && (
-                                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-                                    <input
-                                      type="checkbox"
-                                      className="w-3.5 h-3.5 rounded"
-                                      checked={grantRepoAccess}
-                                      onChange={(e) => setGrantRepoAccess(e.target.checked)}
-                                    />
-                                    Grant GitHub repo access to all team repositories
-                                    {grantRepoAccess && (
-                                      <span className="text-amber-500">— you are about to give push access to {selectedTeam.services.filter(s => "githubRepoUrl" in s && s.githubRepoUrl).length} repo(s)</span>
-                                    )}
-                                  </label>
-                                )}
                               </>
                             )}
                             {selectedTeam.users.length === 0 ? (
@@ -337,12 +359,31 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
                                       <span>{u.username}</span>
                                       <Badge variant="secondary" className="text-[9px]">{u.role}</Badge>
                                     </div>
-                                    <button
-                                      onClick={() => removeMember(team.slug, u.id)}
-                                      className="text-muted-foreground hover:text-destructive text-xs"
-                                    >
-                                      Remove
-                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      {grantedUsers.has(u.username) ? (
+                                        <button
+                                          onClick={() => handleRevokeRepoAccess(team.slug, u.id, u.username)}
+                                          disabled={repoAccessLoading === u.username}
+                                          className="px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-red-950 dark:hover:text-red-400 text-[10px] font-medium disabled:opacity-40 transition-colors"
+                                        >
+                                          {repoAccessLoading === u.username ? "..." : "Access granted ✓"}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleGrantRepoAccess(team.slug, u.username)}
+                                          disabled={repoAccessLoading === u.username}
+                                          className="px-2 py-0.5 rounded border border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950 text-[10px] font-medium disabled:opacity-40 transition-colors"
+                                        >
+                                          {repoAccessLoading === u.username ? "..." : "Grant access"}
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => removeMember(team.slug, u.id)}
+                                        className="px-2 py-0.5 rounded border border-muted-foreground/20 text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 dark:hover:bg-destructive/10 text-[10px] font-medium transition-colors"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>

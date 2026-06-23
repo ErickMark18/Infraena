@@ -45,6 +45,8 @@ for (const cat of Object.keys(CATEGORIES) as ServiceCategory[]) {
   }
 }
 
+const categoryOrder: ServiceCategory[] = ["frontend", "backend", "database", "infrastructure", "mobile", "other"];
+
 export function StackBadge({ category, languages, size = "default" }: StackBadgeProps) {
   const langs = languages ?? [];
 
@@ -70,9 +72,13 @@ export function StackBadge({ category, languages, size = "default" }: StackBadge
     );
   }
 
+  const sortedEntries = [...grouped.entries()].sort(
+    ([a], [b]) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b)
+  );
+
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      {[...grouped.entries()].map(([cat, groupLangs]) => (
+      {sortedEntries.map(([cat, groupLangs]) => (
         <span
           key={cat}
           className={cn(

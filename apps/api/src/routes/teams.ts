@@ -191,6 +191,119 @@ export async function teamRoutes(app: FastifyInstance) {
     return { success: true };
   });
 
+  app.post("/:slug/repo-access", { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const body = (request.body ?? {}) as { username?: string };
+    const username = body.username?.trim();
+    if (!username) {
+      return reply.status(400).send({ error: "username is required" });
+    }
+
+    const team = await prisma.team.findUnique({ where: { slug } });
+    if (!team) {
+      return reply.status(404).send({ error: "Team not found" });
+    }
+
+    if (!env.GITHUB_TOKEN) {
+      return reply.status(400).send({ error: "GITHUB_TOKEN not configured" });
+    }
+
+    const services = await prisma.service.findMany({
+      where: { teamId: team.id, githubRepoUrl: { not: null } },
+      select: { githubRepoUrl: true },
+    });
+
+    if (services.length === 0) {
+      return reply.status(400).send({ error: "No repositories in this team" });
+    }
+
+    const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
+    let reposGranted = 0;
+    const errors: string[] = [];
+
+    for (const svc of services) {
+      const parts = svc.githubRepoUrl!.replace("https://github.com/", "").replace(/\/$/, "").split("/");
+      if (parts.length < 2) continue;
+      if (parts[0].toLowerCase() === username.toLowerCase()) continue; // repo owner — skip
+      try {
+        await octokit.rest.repos.addCollaborator({
+          owner: parts[0],
+          repo: parts[1],
+          username,
+          permission: "push",
+        });
+        reposGranted++;
+      } catch (e: unknown) {
+        const msg = (e as Error).message ?? "";
+        if (msg.includes("owner cannot be a collaborator")) {
+          // owner already has admin — skip silently
+        } else {
+          errors.push(`${parts[0]}/${parts[1]}: ${msg}`);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      reposGranted,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  });
+
+  app.delete("/:slug/repo-access/:userId", { preHandler: [authMiddleware] }, async (request, reply) => {
+    const { slug, userId } = request.params as { slug: string; userId: string };
+
+    const team = await prisma.team.findUnique({ where: { slug } });
+    if (!team) {
+      return reply.status(404).send({ error: "Team not found" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return reply.status(404).send({ error: "User not found" });
+    }
+
+    if (!env.GITHUB_TOKEN) {
+      return reply.status(400).send({ error: "GITHUB_TOKEN not configured" });
+    }
+
+    const services = await prisma.service.findMany({
+      where: { teamId: team.id, githubRepoUrl: { not: null } },
+      select: { githubRepoUrl: true },
+    });
+
+    const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
+    let reposRevoked = 0;
+    const errors: string[] = [];
+
+    for (const svc of services) {
+      const parts = svc.githubRepoUrl!.replace("https://github.com/", "").replace(/\/$/, "").split("/");
+      if (parts.length < 2) continue;
+      if (parts[0].toLowerCase() === user.username.toLowerCase()) continue; // repo owner — skip
+      try {
+        await octokit.rest.repos.removeCollaborator({
+          owner: parts[0],
+          repo: parts[1],
+          username: user.username,
+        });
+        reposRevoked++;
+      } catch (e: unknown) {
+        const msg = (e as Error).message ?? "";
+        if (msg.includes("owner cannot be a collaborator")) {
+          // owner cannot be removed — skip silently
+        } else {
+          errors.push(`${parts[0]}/${parts[1]}: ${msg}`);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      reposRevoked,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  });
+
   app.delete("/:slug", { preHandler: [authMiddleware] }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
 
