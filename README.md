@@ -10,8 +10,6 @@ Infraena is a self-service Internal Developer Platform. Developers create
 services with GitHub repos, Kubernetes namespaces and Vault secrets — all
 from a web interface, without touching Terraform or kubectl.
 
-> Landing page, architecture docs, development guide, and roadmap: available in `docs/` (not committed — see `.gitignore`)
-
 ## Quickstart
 
 ```bash
