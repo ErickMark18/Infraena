@@ -17,6 +17,8 @@ const envSchema = z.object({
   ARGOCD_TOKEN: z.string().optional(),
   API_PORT: z.coerce.number().default(8080),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  RATE_LIMIT_MAX: z.coerce.number().default(200),
+  RATE_LIMIT_WINDOW: z.string().default("1 minute"),
 });
 
 export type Env = z.infer<typeof envSchema>;

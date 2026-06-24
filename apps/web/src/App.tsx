@@ -5,6 +5,7 @@ import { CreateServicePage } from "@/features/create/CreateServicePage";
 import { ServiceDetailPage } from "@/features/service/ServiceDetailPage";
 import { TeamsPage } from "@/features/teams/TeamsPage";
 import { SetupPage } from "@/features/setup/SetupPage";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/lib/hooks";
 
 type Page =
@@ -53,18 +54,20 @@ export default function App() {
   }
 
   return (
-    <Layout
-      user={user ? { username: user.username, avatarUrl: user.avatarUrl } : null}
-      onLogin={login}
-      onLogout={logout}
-      currentPath={window.location.pathname}
-      onNavigate={navigate}
-    >
-      {page.name === "catalog"  && <CatalogPage onNavigate={navigate} />}
-      {page.name === "create"   && <CreateServicePage onNavigate={navigate} />}
-      {page.name === "teams"    && <TeamsPage onNavigate={navigate} />}
-      {page.name === "setup"    && <SetupPage onNavigate={navigate} />}
-      {page.name === "service"  && <ServiceDetailPage slug={page.slug} onNavigate={navigate} />}
-    </Layout>
+    <ErrorBoundary>
+      <Layout
+        user={user ? { username: user.username, avatarUrl: user.avatarUrl } : null}
+        onLogin={login}
+        onLogout={logout}
+        currentPath={window.location.pathname}
+        onNavigate={navigate}
+      >
+        {page.name === "catalog"  && <CatalogPage onNavigate={navigate} />}
+        {page.name === "create"   && <CreateServicePage onNavigate={navigate} />}
+        {page.name === "teams"    && <TeamsPage onNavigate={navigate} />}
+        {page.name === "setup"    && <SetupPage onNavigate={navigate} />}
+        {page.name === "service"  && <ServiceDetailPage slug={page.slug} onNavigate={navigate} />}
+      </Layout>
+    </ErrorBoundary>
   );
 }

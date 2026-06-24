@@ -31,8 +31,8 @@ await app.register(cookie, {
 });
 
 await app.register(rateLimit, {
-  max: 200,
-  timeWindow: "1 minute",
+  max: env.RATE_LIMIT_MAX,
+  timeWindow: env.RATE_LIMIT_WINDOW,
   keyGenerator: (request) => {
     return request.ip;
   },
