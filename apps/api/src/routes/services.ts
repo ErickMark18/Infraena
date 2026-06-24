@@ -20,7 +20,10 @@ function getTemplates() {
     if (existsSync(templatesPath)) {
       templatesCache = JSON.parse(readFileSync(templatesPath, "utf-8"));
     }
-  } catch {}
+  } catch (err) {
+    console.error("Failed to load templates:", (err as Error).message);
+    templatesCache = [];
+  }
   return templatesCache ?? [];
 }
 
@@ -50,8 +53,9 @@ async function deleteGitHubRepo(url: string | null) {
     const [owner, repo] = parts;
     const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
     await octokit.rest.repos.delete({ owner, repo });
-  } catch {
+  } catch (err) {
     // repo may already be deleted or token lacks permissions
+    console.error(`Failed to delete GitHub repo ${url}:`, (err as Error).message);
   }
 }
 

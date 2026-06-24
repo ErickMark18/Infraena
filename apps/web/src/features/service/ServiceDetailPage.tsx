@@ -81,7 +81,8 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
         setActivity(activityData);
         await loadDeployments(1);
         await loadDeps();
-      } catch {
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to load service");
         setService(null);
       } finally {
         setLoading(false);
@@ -107,14 +108,16 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
   }
 
   const searchServices = async (query: string) => {
-    if (query.length < 2) { setDepSearchResults([]); return; }
     setDepSearch(query);
+    if (query.length < 2) { setDepSearchResults([]); return; }
     try {
       const res = await api.get<{ data: { id: string; name: string; slug: string }[] }>(`/api/services?limit=10`);
       setDepSearchResults(
         (res.data ?? []).filter((s) => s.slug !== slug && s.name.toLowerCase().includes(query.toLowerCase()))
       );
-    } catch {}
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to search services");
+    }
   };
 
   const addDependency = async (targetSlug: string) => {
@@ -137,7 +140,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     try {
       await api.delete(`/api/services/${service.slug}/dependencies/${depId}`);
       await loadDeps();
-    } catch {}
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove dependency");
+    }
   };
 
   const handleDeploy = async () => {
@@ -152,7 +157,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
       await loadDeployments(1);
       const act = await api.get<ActivityItem[]>(`/api/services/${slug}/activity`).catch(() => []);
       setActivity(act);
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to deploy");
+    } finally {
       setDeploying(false);
     }
   };
@@ -185,9 +192,11 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
             setProvisioningServiceId(null);
             clearInterval(poll);
           }
-        } catch {}
+          } catch {}
       }, 2500);
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start provisioning");
+    } finally {
       setProvisioning(false);
     }
   };
@@ -198,7 +207,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     try {
       await api.delete(`/api/services/${service.slug}`);
       onNavigate("/");
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete service");
+    } finally {
       setDeleting(false);
       setShowConfirm(false);
     }
@@ -211,7 +222,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
       const updated = await api.patch<Service>(`/api/services/${service.slug}`, { name: editName.trim() });
       setService(updated);
       if (updated.slug !== service.slug) onNavigate(`/services/${updated.slug}`);
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
       setSaving(false);
       setEditingName(false);
     }
@@ -223,7 +236,9 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     try {
       const updated = await api.patch<Service>(`/api/services/${service.slug}`, { description: editDesc || null });
       setService(updated);
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
       setSaving(false);
       setEditingDesc(false);
     }

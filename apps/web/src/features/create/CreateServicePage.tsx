@@ -31,6 +31,7 @@ import {
   Server,
   Key,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const categoryKeys = Object.keys(CATEGORIES) as ServiceCategory[];
 
@@ -117,8 +118,8 @@ export function CreateServicePage({ onNavigate }: { onNavigate: (path: string) =
   const formName = useWatch({ control, name: "name" }) as string | undefined;
 
   useEffect(() => {
-    api.get<Team[]>("/api/teams").then(setTeams).catch(() => {});
-    api.get<Template[]>("/api/services/templates").then(setTemplates).catch(() => {});
+    api.get<Team[]>("/api/teams").then(setTeams).catch((err) => { toast.error(err instanceof Error ? err.message : "Failed to load teams"); });
+    api.get<Template[]>("/api/services/templates").then(setTemplates).catch((err) => { toast.error(err instanceof Error ? err.message : "Failed to load templates"); });
   }, []);
 
   useEffect(() => {

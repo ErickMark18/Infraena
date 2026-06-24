@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, ExternalLink, ArrowRight, PackageOpen, Plus, ChevronLeft, ChevronRight, Filter, X, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw, LayoutGrid, List } from "lucide-react";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 interface PaginatedResponse {
@@ -79,7 +80,8 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
       setServices(res.data);
       setPagination(res.pagination);
       setCounters(res.counters ?? {});
-    } catch {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load services");
       setServices([]);
     } finally {
       setLoading(false);
@@ -89,7 +91,7 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
   useEffect(() => { fetchServices(); }, [fetchServices]);
 
   useEffect(() => {
-    api.get<{ id: string; name: string }[]>("/api/teams").then(setTeams).catch(() => {});
+    api.get<{ id: string; name: string }[]>("/api/teams").then(setTeams).catch((err) => { toast.error(err instanceof Error ? err.message : "Failed to load teams"); });
   }, []);
 
   const handleImport = async () => {
@@ -106,7 +108,9 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
       setImportUrl("");
       setImportTeamId("");
       fetchServices();
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import repository");
+    } finally {
       setImporting(false);
     }
   };
@@ -137,7 +141,9 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
     try {
       await api.delete(`/api/services/${slug}`);
       fetchServices();
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete service");
+    } finally {
       setDeletingSlug(null);
       setConfirmDelete(null);
     }
@@ -166,7 +172,9 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
       await api.post("/api/services/bulk-delete", { ids: [...selected] });
       setSelected(new Set());
       fetchServices();
-    } catch {} finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete services");
+    } finally {
       setBulkDeleting(false);
     }
   };
