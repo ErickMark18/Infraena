@@ -15,8 +15,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/ apps/api/
 COPY packages/shared-types/ packages/shared-types/
-RUN pnpm --filter @idp/api exec prisma generate
-RUN pnpm --filter @idp/api build
+RUN pnpm --filter @infraena/api exec prisma generate
+RUN pnpm --filter @infraena/api build
 
 FROM node:${NODE_VERSION} AS runner
 WORKDIR /app

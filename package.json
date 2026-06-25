@@ -1,5 +1,5 @@
 {
-  "name": "idp",
+  "name": "infraena",
   "private": true,
   "packageManager": "pnpm@11.6.0",
   "scripts": {
@@ -9,9 +9,9 @@
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yaml}\"",
-    "db:migrate": "pnpm --filter @idp/api exec prisma migrate dev",
-    "db:generate": "pnpm --filter @idp/api exec prisma generate",
-    "db:studio": "pnpm --filter @idp/api exec prisma studio"
+    "db:migrate": "pnpm --filter @infraena/api exec prisma migrate dev",
+    "db:generate": "pnpm --filter @infraena/api exec prisma generate",
+    "db:studio": "pnpm --filter @infraena/api exec prisma studio"
   },
   "devDependencies": {
     "prettier": "^3.3.0",

@@ -1,5 +1,5 @@
-import type { ServiceCategory, ServiceLanguage } from "@idp/shared-types";
-import { CATEGORIES } from "@idp/shared-types";
+import type { ServiceCategory, ServiceLanguage } from "@infraena/shared-types";
+import { CATEGORIES } from "@infraena/shared-types";
 import { cn } from "@/lib/utils";
 
 interface StackBadgeProps {

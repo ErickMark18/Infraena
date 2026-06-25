@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { Service } from "@idp/shared-types";
-import { CATEGORIES } from "@idp/shared-types";
-import type { ServiceCategory } from "@idp/shared-types";
+import type { Service } from "@infraena/shared-types";
+import { CATEGORIES } from "@infraena/shared-types";
+import type { ServiceCategory } from "@infraena/shared-types";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -91,6 +91,18 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
   useEffect(() => { fetchServices(); }, [fetchServices]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (teamFilter) {
+      params.set("team", teamFilter);
+    } else {
+      params.delete("team");
+    }
+    const newSearch = params.toString();
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ""}`;
+    window.history.replaceState({}, "", newUrl);
+  }, [teamFilter]);
+
+  useEffect(() => {
     api.get<{ id: string; name: string }[]>("/api/teams").then(setTeams).catch((err) => { toast.error(err instanceof Error ? err.message : "Failed to load teams"); });
   }, []);
 
@@ -130,11 +142,12 @@ export function CatalogPage({ onNavigate }: { onNavigate: (path: string) => void
   const clearFilters = () => {
     setLanguageFilters([]);
     setStatusFilter("");
+    setTeamFilter("");
     setPage(1);
     setSearch("");
   };
 
-  const hasActiveFilters = languageFilters.length > 0 || statusFilter || search;
+  const hasActiveFilters = languageFilters.length > 0 || statusFilter || teamFilter || search;
 
   const handleDelete = async (slug: string) => {
     setDeletingSlug(slug);

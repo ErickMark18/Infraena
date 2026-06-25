@@ -1,4 +1,4 @@
-import type { ServiceStatus } from "@idp/shared-types";
+import type { ServiceStatus } from "@infraena/shared-types";
 import { cn } from "@/lib/utils";
 
 interface StatusBadgeProps {

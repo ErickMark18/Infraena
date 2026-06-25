@@ -1,3 +1,6 @@
+export const INFRAENA_MANAGED_TAG = "infraena-managed";
+export const INFRAENA_MANAGED_DESCRIPTION = "Managed by Infraena";
+
 export interface Team {
   id: string;
   name: string;

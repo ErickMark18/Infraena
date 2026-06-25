@@ -1,5 +1,5 @@
 {
-  "name": "@idp/api",
+  "name": "@infraena/api",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -30,7 +30,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@idp/shared-types": "workspace:*",
+    "@infraena/shared-types": "workspace:*",
     "@types/node": "^22.0.0",
     "prisma": "^6.2.0",
     "tsx": "^4.19.0",

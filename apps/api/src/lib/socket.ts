@@ -1,6 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
-import type { JobUpdateMessage, ServiceReadyMessage } from "@idp/shared-types";
+import type { JobUpdateMessage, ServiceReadyMessage } from "@infraena/shared-types";
 import { activeWebSocketConnections } from "./metrics.js";
 
 let io: Server | null = null;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Service } from "@idp/shared-types";
+import type { Service } from "@infraena/shared-types";
 import { api } from "./api";
 
 let token: string | null = null;

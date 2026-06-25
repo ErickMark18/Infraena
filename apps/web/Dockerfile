@@ -9,7 +9,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 RUN pnpm install --frozen-lockfile
 COPY apps/web/ apps/web/
 COPY packages/shared-types/ packages/shared-types/
-RUN pnpm --filter @idp/web build
+RUN pnpm --filter @infraena/web build
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html

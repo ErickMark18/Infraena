@@ -69,7 +69,7 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
     devDependencies:
-      '@idp/shared-types':
+      '@infraena/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
       '@types/node':
@@ -169,7 +169,7 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
     devDependencies:
-      '@idp/shared-types':
+      '@infraena/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
       '@tailwindcss/typography':

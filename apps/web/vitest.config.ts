@@ -14,7 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@idp/shared-types": path.resolve(__dirname, "../../packages/shared-types/src"),
+      "@infraena/shared-types": path.resolve(__dirname, "../../packages/shared-types/src"),
     },
   },
 });

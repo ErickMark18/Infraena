@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Service, ProvisionJob, Deployment, ServiceDependency } from "@idp/shared-types";
+import type { Service, ProvisionJob, Deployment, ServiceDependency } from "@infraena/shared-types";
 import { api } from "@/lib/api";
 import { useProvisionLogs } from "@/lib/websocket";
 import { StatusBadge } from "@/components/StatusBadge";

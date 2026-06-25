@@ -3,6 +3,7 @@ import { Octokit } from "octokit";
 import { readdirSync, readFileSync, existsSync } from "fs";
 import { join, relative, dirname } from "path";
 import { fileURLToPath } from "url";
+import { INFRAENA_MANAGED_TAG, INFRAENA_MANAGED_DESCRIPTION } from "@infraena/shared-types";
 import { prisma } from "../db/prisma.js";
 import { env } from "../lib/env.js";
 import { updateJobLog, markJobRunning, markJobSuccess, markJobFailed, checkAllJobsComplete } from "./helpers.js";
@@ -63,7 +64,7 @@ async function createBlankRepo(
   try {
     const { data: repo } = await octokit.rest.repos.createInOrg({
       org, name: slug, private: true, auto_init: false,
-      description: `Managed by Infraena`,
+      description: INFRAENA_MANAGED_DESCRIPTION,
     });
     return repo.html_url;
   } catch (e: unknown) {
@@ -71,7 +72,7 @@ async function createBlankRepo(
     if (status === 404 || status === 403) {
       const { data: repo } = await octokit.rest.repos.createForAuthenticatedUser({
         name: slug, private: true, auto_init: false,
-        description: `Managed by Infraena`,
+        description: INFRAENA_MANAGED_DESCRIPTION,
       });
       return repo.html_url;
     }
@@ -136,8 +137,8 @@ async function pushTemplateFiles(
 
 async function addIdpTopic(octokit: Octokit, org: string, slug: string) {
   try {
-    await octokit.rest.repos.replaceAllTopics({ owner: org, repo: slug, names: ["infraena-managed"] });
-    return "Added topic 'infraena-managed' to repo";
+    await octokit.rest.repos.replaceAllTopics({ owner: org, repo: slug, names: [INFRAENA_MANAGED_TAG] });
+    return `Added topic '${INFRAENA_MANAGED_TAG}' to repo`;
   } catch {
     return "Could not add topic (may already exist)";
   }
@@ -243,7 +244,7 @@ export async function buildGitHubWorker() {
           await log("Initializing repo...");
           await pushFileToRepo(
             octokit, org, repo, "README.md",
-            `# ${slug}\n\nManaged by Infraena.`,
+            `# ${slug}\n\n${INFRAENA_MANAGED_DESCRIPTION}.`,
             "Initial commit from Infraena",
             committer
           );
@@ -264,7 +265,7 @@ export async function buildGitHubWorker() {
           await log(`GitHub repo URL saved: ${repoUrl}`);
         }
 
-        await log("Adding infraena-managed topic...");
+        await log(`Adding ${INFRAENA_MANAGED_TAG} topic...`);
         const topicResult = await addIdpTopic(octokit, org, repo);
         await log(topicResult);
 

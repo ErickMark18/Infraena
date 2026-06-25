@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
-import type { JobType, JobStatus } from "@idp/shared-types";
+import type { JobType, JobStatus } from "@infraena/shared-types";
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? "http://localhost:8080";
 

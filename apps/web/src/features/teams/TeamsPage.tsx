@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Service, ServiceCategory, ServiceLanguage } from "@idp/shared-types";
+import type { Service, ServiceCategory, ServiceLanguage } from "@infraena/shared-types";
 import { api } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";

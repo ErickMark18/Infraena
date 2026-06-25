@@ -1,4 +1,5 @@
 import { Worker, Job } from "bullmq";
+import { INFRAENA_MANAGED_TAG, INFRAENA_MANAGED_DESCRIPTION } from "@infraena/shared-types";
 import { prisma } from "../db/prisma.js";
 import { env } from "../lib/env.js";
 import { updateJobLog, markJobRunning, markJobSuccess, markJobFailed, checkAllJobsComplete } from "./helpers.js";
@@ -67,8 +68,8 @@ class TerraformCloudClient {
               name,
               executionMode: "remote",
               terraformVersion: "1.7.0",
-              description: `Workspace for ${name} - managed by Infraena`,
-              tagNames: ["infraena-managed"],
+              description: `Workspace for ${name} - ${INFRAENA_MANAGED_DESCRIPTION}`,
+              tagNames: [INFRAENA_MANAGED_TAG],
             },
           },
         }),

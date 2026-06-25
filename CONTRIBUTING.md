@@ -64,7 +64,7 @@ Opens API at `http://localhost:8080` and web at `http://localhost:3000`.
 
 - **ESM only** — all packages use `"type": "module"`. Imports need `.js` extension even in `.ts` files.
 - **TypeScript strict** — `strict: true`. No `any` without explicit reason.
-- **Zod validation** — backend uses Zod for request validation. Frontend shares schemas via `@idp/shared-types`.
+- **Zod validation** — backend uses Zod for request validation. Frontend shares schemas via `@infraena/shared-types`.
 - **Commits** — present tense, concise: "Add feature X", "Fix bug Y".
 - **No secrets in code** — all credentials come from `process.env`, validated at startup.
 - **Workers skip gracefully** — missing tokens mean the worker marks the job as success without making API calls.
