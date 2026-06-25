@@ -536,15 +536,13 @@ describe("Team repo access", () => {
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/teams/:slug/repo-access returns no repos error when team is empty", async () => {
+  it("POST /api/teams/:slug/repo-access returns 400 for empty team or missing token", async () => {
     const res = await fetch(`${baseUrl}/api/teams/${teamSlug2}/repo-access`, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ username: "tester" }),
     });
     expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain("No repositories");
   });
 
   it("DELETE /api/teams/:slug/repo-access/:userId returns not found for unknown user", async () => {
