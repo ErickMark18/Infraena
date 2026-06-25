@@ -101,7 +101,7 @@ export function TeamsPage({ onNavigate }: { onNavigate?: (path: string) => void 
     if (!editingSlug || !editName.trim()) { setEditingSlug(null); return; }
     setSavingEdit(true);
     try {
-      const updated = await api.patch<Team>(`/api/teams/${editingSlug}`, { name: editName.trim() });
+      const { data: updated } = await api.patch<{ success: boolean; data: Team }>(`/api/teams/${editingSlug}`, { name: editName.trim() });
       toast.success("Team renamed");
       loadTeams();
       if (selectedTeam?.slug === editingSlug) {

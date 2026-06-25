@@ -161,7 +161,7 @@ export function CreateServicePage({ onNavigate }: { onNavigate: (path: string) =
         provisioning,
         enableBranchProtection,
       };
-      const service = await api.post<Service>("/api/services", payload);
+      const { data: service } = await api.post<{ success: boolean; data: Service }>("/api/services", payload);
       setResult(service);
       setServiceId(service.id);
       if (provisioning.length === 0) {

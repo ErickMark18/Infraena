@@ -325,7 +325,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       }
     }
 
-    return reply.status(201).send(service);
+    return reply.status(201).send({ success: true, data: service });
   });
 
   app.post("/import", { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -435,7 +435,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       }
     }
 
-    return reply.status(201).send(service);
+    return reply.status(201).send({ success: true, data: service });
   });
 
   app.get("/:slug/jobs", async (request, reply) => {
@@ -528,7 +528,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.status(201).send({ ...deployment, status: finalStatus, syncResult });
+    return reply.status(201).send({ success: true, data: { ...deployment, status: finalStatus, syncResult } });
   });
 
   app.patch("/:slug", { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -562,7 +562,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       include: { team: true, owner: true },
     });
 
-    return updated;
+    return { success: true, data: updated };
   });
 
   app.get("/:slug/activity", async (request, reply) => {
@@ -716,7 +716,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       }
     }
 
-    return reply.status(201).send({ message: "Provisioning started", provisioned: newSteps });
+    return reply.status(201).send({ success: true, data: { message: "Provisioning started", provisioned: newSteps } });
   });
 
   app.get("/:slug/dependencies", async (request, reply) => {
@@ -785,7 +785,7 @@ export async function serviceRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.status(201).send(dep);
+    return reply.status(201).send({ success: true, data: dep });
   });
 
   app.delete("/:slug/dependencies/:id", { preHandler: [authMiddleware] }, async (request, reply) => {

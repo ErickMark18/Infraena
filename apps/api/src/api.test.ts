@@ -20,6 +20,10 @@ function authHeaders() {
   return { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
 }
 
+function authHeadersNoBody() {
+  return { Authorization: `Bearer ${authToken}` };
+}
+
 beforeAll(async () => {
   await app.ready();
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -31,6 +35,22 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  const testServices = await prisma.service.findMany({
+    where: { name: { startsWith: "svc-" } },
+    select: { id: true },
+  });
+  const testServiceIds = testServices.map((s) => s.id);
+
+  if (testServiceIds.length > 0) {
+    await prisma.serviceDependency.deleteMany({
+      where: {
+        OR: [
+          { sourceServiceId: { in: testServiceIds } },
+          { targetServiceId: { in: testServiceIds } },
+        ],
+      },
+    });
+  }
   await prisma.provisionJob.deleteMany({
     where: { service: { name: { startsWith: "svc-" } } },
   });
@@ -71,7 +91,8 @@ describe("Teams", () => {
     });
     const data = await res.json();
     expect(res.status).toBe(201);
-    expect(data.name).toBe(teamName);
+    expect(data.success).toBe(true);
+    expect(data.data.name).toBe(teamName);
   });
 
   it("GET /api/teams lists teams", async () => {
@@ -94,8 +115,9 @@ describe("Teams", () => {
 
 describe("Services", () => {
   const serviceName = `svc-${Date.now()}`;
-  const serviceSlug = serviceName.toLowerCase();
+  let serviceSlug = serviceName.toLowerCase();
   let teamId: string;
+  let teamSlug: string;
 
   beforeAll(async () => {
     const res = await fetch(`${baseUrl}/api/teams`, {
@@ -104,20 +126,21 @@ describe("Services", () => {
       body: JSON.stringify({ name: `svc-team-${Date.now()}` }),
     });
     const data = await res.json();
-    teamId = data.id;
+    teamId = data.data.id;
+    teamSlug = data.data.slug;
   });
 
   afterAll(async () => {
     try {
       await fetch(`${baseUrl}/api/services/${serviceSlug}`, {
         method: "DELETE",
-        headers: authHeaders(),
+        headers: authHeadersNoBody(),
       });
     } catch {}
     try {
-      await fetch(`${baseUrl}/api/teams/${teamId}`, {
+      await fetch(`${baseUrl}/api/teams/${teamSlug}`, {
         method: "DELETE",
-        headers: authHeaders(),
+        headers: authHeadersNoBody(),
       });
     } catch {}
   });
@@ -130,10 +153,11 @@ describe("Services", () => {
     });
     const data = await res.json();
     expect(res.status).toBe(201);
-    expect(data.name).toBe(serviceName);
-    expect(data.category).toBe("backend");
-    expect(data.languages).toEqual(["nodejs"]);
-    expect(data.status).toBe("provisioning");
+    expect(data.success).toBe(true);
+    expect(data.data.name).toBe(serviceName);
+    expect(data.data.category).toBe("backend");
+    expect(data.data.languages).toEqual(["nodejs"]);
+    expect(data.data.status).toBe("provisioning");
   });
 
   it("GET /api/services returns paginated response", async () => {
@@ -156,6 +180,379 @@ describe("Services", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
+  });
+
+  it("PATCH /api/services/:slug edits description only", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ description: "Updated description for tests" }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.data.description).toBe("Updated description for tests");
+    expect(data.data.slug).toBe(serviceSlug);
+  });
+
+  it("PATCH /api/services/:slug rejects invalid name", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: "ab" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /api/services/:slug edits name (slug changes)", async () => {
+    const newName = `svc-renamed-${Date.now()}`;
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: newName }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.data.name).toBe(newName);
+    expect(data.data.slug).toBe(newName.toLowerCase());
+    serviceSlug = data.data.slug;
+  });
+
+  it("GET /api/services/preview returns preview structure", async () => {
+    const res = await fetch(`${baseUrl}/api/services/preview?name=my-service&template=nodejs`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toHaveProperty("slug");
+    expect(data).toHaveProperty("github");
+    expect(data).toHaveProperty("terraform");
+    expect(data).toHaveProperty("vault");
+    expect(data.slug).toBe("my-service");
+  });
+
+  it("GET /api/services/preview uses default name", async () => {
+    const res = await fetch(`${baseUrl}/api/services/preview`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.slug).toBe("my-service");
+  });
+
+  it("POST /api/services/import rejects invalid URL", async () => {
+    const res = await fetch(`${baseUrl}/api/services/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ repoUrl: "not-a-url", teamId }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/services/import rejects missing teamId", async () => {
+    const res = await fetch(`${baseUrl}/api/services/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ repoUrl: "https://example.com" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/services/import rejects non-GitHub URL", async () => {
+    const res = await fetch(`${baseUrl}/api/services/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ repoUrl: "https://gitlab.com/user/repo", teamId }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/services/:slug/provision starts provisioning new steps", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/provision`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ steps: ["vault"] }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(201);
+    expect(data.success).toBe(true);
+    expect(data.data.message).toBe("Provisioning started");
+    expect(data.data.provisioned).toEqual(["vault"]);
+  });
+
+  it("POST /api/services/:slug/provision skips already completed steps", async () => {
+    // Simulate that github and terraform jobs completed successfully
+    await prisma.provisionJob.updateMany({
+      where: { service: { slug: serviceSlug }, type: { in: ["github", "terraform"] } },
+      data: { status: "success" },
+    });
+
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/provision`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ steps: ["github", "terraform"] }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.message).toContain("already provisioned");
+  });
+
+  it("POST /api/services/:slug/deploy creates a deployment", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/deploy`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ environment: "staging", version: "1.0.0" }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(201);
+    expect(data.success).toBe(true);
+    expect(data.data.version).toBe("1.0.0");
+    expect(data.data.environment).toBe("staging");
+  });
+
+  it("GET /api/services/:slug/deployments returns deployments", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/deployments`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toHaveProperty("data");
+    expect(data).toHaveProperty("pagination");
+    expect(Array.isArray(data.data)).toBe(true);
+    expect(data.data.length).toBeGreaterThan(0);
+  });
+
+  it("POST /api/services/:slug/deploy with production environment", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/deploy`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ environment: "production", version: "2.0.0" }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(201);
+    expect(data.success).toBe(true);
+    expect(data.data.environment).toBe("production");
+  });
+
+  it("GET /api/services/:slug/activity returns timeline", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${serviceSlug}/activity`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  it("POST /api/services/bulk-delete deletes services by ids", async () => {
+    const createRes = await fetch(`${baseUrl}/api/services`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: `svc-bulkdel-${Date.now()}`, category: "backend", languages: [], teamId, provisioning: [] }),
+    });
+    const createData = await createRes.json();
+    const bulkServiceId = createData.data.id;
+
+    const res = await fetch(`${baseUrl}/api/services/bulk-delete`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ ids: [bulkServiceId] }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.deleted).toBe(1);
+  });
+
+  it("POST /api/services/bulk-delete rejects empty ids", async () => {
+    const res = await fetch(`${baseUrl}/api/services/bulk-delete`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ ids: [] }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("Dependencies", () => {
+  const svcA = `svc-depa-${Date.now()}`;
+  const svcB = `svc-depb-${Date.now()}`;
+  let slugA: string;
+  let slugB: string;
+  let teamSlug: string;
+  let depId: string;
+
+  beforeAll(async () => {
+    const teamRes = await fetch(`${baseUrl}/api/teams`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: `svc-team-${Date.now()}` }),
+    });
+    const teamData = await teamRes.json();
+    const teamId = teamData.data.id;
+    teamSlug = teamData.data.slug;
+
+    const resA = await fetch(`${baseUrl}/api/services`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: svcA, category: "backend", languages: [], teamId, provisioning: [] }),
+    });
+    const dataA = await resA.json();
+    slugA = dataA.data.slug;
+
+    const resB = await fetch(`${baseUrl}/api/services`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: svcB, category: "backend", languages: [], teamId, provisioning: [] }),
+    });
+    const dataB = await resB.json();
+    slugB = dataB.data.slug;
+  });
+
+  afterAll(async () => {
+    try { await fetch(`${baseUrl}/api/services/${slugA}`, { method: "DELETE", headers: authHeadersNoBody() }); } catch {}
+    try { await fetch(`${baseUrl}/api/services/${slugB}`, { method: "DELETE", headers: authHeadersNoBody() }); } catch {}
+    try { await fetch(`${baseUrl}/api/teams/${teamSlug}`, { method: "DELETE", headers: authHeadersNoBody() }); } catch {}
+  });
+
+  it("GET /api/services/:slug/dependencies returns empty graph", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toHaveProperty("dependsOn");
+    expect(data).toHaveProperty("dependedOnBy");
+    expect(data.dependsOn).toEqual([]);
+    expect(data.dependedOnBy).toEqual([]);
+  });
+
+  it("POST /api/services/:slug/dependencies creates dependency", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ targetSlug: slugB, type: "api", label: "HTTP API" }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(201);
+    expect(data.success).toBe(true);
+    expect(data.data.targetService.slug).toBe(slugB);
+    expect(data.data.type).toBe("api");
+    expect(data.data.label).toBe("HTTP API");
+    depId = data.data.id;
+  });
+
+  it("GET /api/services/:slug/dependencies shows depends-on", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.dependsOn.length).toBe(1);
+    expect(data.dependsOn[0].targetService.slug).toBe(slugB);
+    expect(data.dependedOnBy.length).toBe(0);
+  });
+
+  it("GET /api/services/:slug/dependencies shows depended-on-by on target", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugB}/dependencies`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.dependedOnBy.length).toBe(1);
+    expect(data.dependedOnBy[0].sourceService.slug).toBe(slugA);
+    expect(data.dependsOn.length).toBe(0);
+  });
+
+  it("POST /api/services/:slug/dependencies rejects duplicate", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ targetSlug: slugB }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("POST /api/services/:slug/dependencies rejects self-dependency", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ targetSlug: slugA }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE /api/services/:slug/dependencies/:id removes dependency", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies/${depId}`, {
+      method: "DELETE",
+      headers: authHeadersNoBody(),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+  });
+
+  it("GET /api/services/:slug/dependencies confirms removal", async () => {
+    const res = await fetch(`${baseUrl}/api/services/${slugA}/dependencies`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.dependsOn).toEqual([]);
+  });
+});
+
+describe("Setup", () => {
+  it("GET /api/setup/check returns checks object", async () => {
+    const res = await fetch(`${baseUrl}/api/setup/check`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toHaveProperty("timestamp");
+    expect(data).toHaveProperty("allOk");
+    expect(data).toHaveProperty("checks");
+    expect(data.checks).toHaveProperty("database");
+    expect(data.checks).toHaveProperty("redis");
+    expect(data.checks).toHaveProperty("vault");
+    expect(data.checks).toHaveProperty("github");
+    expect(data.checks).toHaveProperty("githubOAuth");
+    expect(data.checks).toHaveProperty("terraform");
+    expect(data.checks).toHaveProperty("argocd");
+    expect(data.checks.database.ok).toBe(true);
+  });
+});
+
+describe("Team repo access", () => {
+  let teamSlug2: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${baseUrl}/api/teams`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: `test-team-${Date.now()}` }),
+    });
+    const data = await res.json();
+    teamSlug2 = data.data.slug;
+  });
+
+  afterAll(async () => {
+    try {
+      await fetch(`${baseUrl}/api/teams/${teamSlug2}`, {
+        method: "DELETE",
+        headers: authHeadersNoBody(),
+      });
+    } catch {}
+  });
+
+  it("POST /api/teams/:slug/repo-access rejects missing username", async () => {
+    const res = await fetch(`${baseUrl}/api/teams/${teamSlug2}/repo-access`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/teams/:slug/repo-access returns no repos error when team is empty", async () => {
+    const res = await fetch(`${baseUrl}/api/teams/${teamSlug2}/repo-access`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ username: "tester" }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("No repositories");
+  });
+
+  it("DELETE /api/teams/:slug/repo-access/:userId returns not found for unknown user", async () => {
+    const res = await fetch(`${baseUrl}/api/teams/${teamSlug2}/repo-access/00000000-0000-0000-0000-000000000000`, {
+      method: "DELETE",
+      headers: authHeadersNoBody(),
+    });
+    expect(res.status).toBe(404);
   });
 });
 

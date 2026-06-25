@@ -219,7 +219,7 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     if (!service || !editName.trim() || editName === service.name) { setEditingName(false); return; }
     setSaving(true);
     try {
-      const updated = await api.patch<Service>(`/api/services/${service.slug}`, { name: editName.trim() });
+      const { data: updated } = await api.patch<{ success: boolean; data: Service }>(`/api/services/${service.slug}`, { name: editName.trim() });
       setService(updated);
       if (updated.slug !== service.slug) onNavigate(`/services/${updated.slug}`);
     } catch (err) {
@@ -234,7 +234,7 @@ export function ServiceDetailPage({ slug, onNavigate }: { slug: string; onNaviga
     if (!service || editDesc === (service.description ?? "")) { setEditingDesc(false); return; }
     setSaving(true);
     try {
-      const updated = await api.patch<Service>(`/api/services/${service.slug}`, { description: editDesc || null });
+      const { data: updated } = await api.patch<{ success: boolean; data: Service }>(`/api/services/${service.slug}`, { description: editDesc || null });
       setService(updated);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save changes");

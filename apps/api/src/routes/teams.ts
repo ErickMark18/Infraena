@@ -56,7 +56,7 @@ export async function teamRoutes(app: FastifyInstance) {
       data: { name, slug },
     });
 
-    return reply.status(201).send(team);
+    return reply.status(201).send({ success: true, data: team });
   });
 
   app.get("/:slug", async (request, reply) => {
@@ -104,7 +104,7 @@ export async function teamRoutes(app: FastifyInstance) {
       include: { _count: { select: { services: true, users: true } } },
     });
 
-    return updated;
+    return { success: true, data: updated };
   });
 
   app.post("/:slug/members", { preHandler: [authMiddleware] }, async (request, reply) => {
